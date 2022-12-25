@@ -1,49 +1,39 @@
 #include <Arduino.h>
+#include "ESP8266WiFi.h"
+
 #include "patterns.h"
 #include "pins.h"
+#include "state.h"
 
-#define DEBOUNCETIME 100
 #define ACTIVETIME 3600000
-
-bool active = true;
-unsigned long last_active = 0;
 
 //PWM stuff
 const int pwm_freq = 5000; // 200 us for one cycle so 1 ms changing should be slow enough?
 const int pwm_resolution = 8;
 
-//State management
-int state = 0;
-
-unsigned long last_press = 0;
-
-void IRAM_ATTR changeState() {
-  if (millis()-last_press > DEBOUNCETIME) {
-    state++;
-    last_press = millis();
-    active = true;
-  }
-}
-
-
 void setup() {
   //Setup led channels
-  ledcSetup(led_channel_1, pwm_freq, pwm_resolution);
-  ledcSetup(led_channel_2, pwm_freq, pwm_resolution);
-  ledcAttachPin(LED_PIN_1, led_channel_1);
-  ledcAttachPin(LED_PIN_2, led_channel_2);
+  pinMode(LED_PIN_1, OUTPUT_OPEN_DRAIN);
+  pinMode(LED_PIN_2, OUTPUT_OPEN_DRAIN);
+  analogWriteFreq(pwm_freq);
   reset();
 
+  Serial.begin(74880);
   //Setup state management
-  pinMode(BUTTON_PIN, INPUT);
-  attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), changeState, RISING);
-  last_active = millis();
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), changeState, FALLING);
 
-  Serial.begin(115200);
+
+  // modem sleep?
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect();
+  WiFi.forceSleepBegin();
+  delay(1);
 }
 
 void loop() {
   if (millis()-last_press < ACTIVETIME) {
+    changed = false;
     switch (state) {
       case 0:
         off();
@@ -74,6 +64,9 @@ void loop() {
         break;
       case 9:
         wave2(2000000, 200, 200);
+        break;
+      case 10:
+        ILY();
         break;
       default:
         state = 0;
